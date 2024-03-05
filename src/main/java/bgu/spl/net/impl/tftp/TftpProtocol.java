@@ -13,42 +13,38 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     @Override
     public void process(byte[] message) {
-
-        switch (message[1]){
-            case (1): {
-//                    RRQ - read request
-            }
-            case (2): {
-//                    WRQ - write request
-            }
-            case (3): {
-//                    DATA - data packet
-            }
-            case (4): {
-//                    ACK - acknowledgment
-            }
-            case (5): {
-//                    ERROR - Error
-            }
-            case (6): {
-//                    DIRQ - directory listing request
-            }
-            case (7): {
-//                    LOGRQ - Login request
-            }
-            case (8): {
-//                    DELRQ - delete file request
-            }
-            case (9): {
-//                    BCAST - broadcast file added/deleted
-            }
-            case (10): {
-//                    DISC - disconnect
-            }
+        OpcodeOperations opcodeOp = new OpcodeOperations(message[1]);
+        switch (opcodeOp.opcode) {
+            case LOGRQ:
+                userLogin(message);
+                break;
         }
+//        switch (message.command) {
+//            case CONNECT:
+//                processConnect(message);
+//                break;
+//            case SEND:
+//                processSend(message);
+//                break;
+//            case SUBSCRIBE:
+//                processSubscribe(message);
+//                break;
+//            case UNSUBSCRIBE:
+//                processUnsubscribe(message);
+//                break;
+//            case DISCONNECT:
+//                processDisconnect(message);
+//                break;
+//            case UNKNOWN:
+//                processUnknown(message);
+//                break;
+//        }
 
         // TODO implement this
         throw new UnsupportedOperationException("Unimplemented method 'process'");
+    }
+
+    private void userLogin(byte[] message) {
     }
 
     @Override
