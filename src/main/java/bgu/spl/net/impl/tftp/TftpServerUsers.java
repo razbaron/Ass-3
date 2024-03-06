@@ -1,24 +1,35 @@
 package bgu.spl.net.impl.tftp;
 
-import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Set;
 
 public class TftpServerUsers {
-    private ArrayList<String> loggedInUsers;
+    private HashMap<Integer, String> loggedInUsers;
+
 
     public TftpServerUsers(){
-        loggedInUsers = new ArrayList<>();
+        loggedInUsers = new HashMap<>();
     }
 
     public boolean isUserLoggedIn(String name) {
-        return loggedInUsers.contains(name);
+        return loggedInUsers.containsValue(name);
     }
 
-    public synchronized void logInUser(String name) {
-        loggedInUsers.add(name);
+    public boolean isUserLoggedIn(int id) {
+        return loggedInUsers.containsKey(id);
     }
 
-    public synchronized void logOutUser(String name) {
-        loggedInUsers.remove(name);
+    public synchronized void logInUser(String name, int id) {
+        loggedInUsers.put(id,name);
+
+    }
+
+    public synchronized void logOutUser(int id) {
+        loggedInUsers.remove(id);
+    }
+
+    public synchronized Set<Integer> getLoggedInUsersId(){
+        return loggedInUsers.keySet();
     }
 
     public synchronized int loggedInUsersCount() {
