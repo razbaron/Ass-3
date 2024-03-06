@@ -17,12 +17,11 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 //        TODO: check which opcode we have. it has to be the first byte of the message.(Parser class)
         if (len <= 1) {
             if (len == 1){
-                OpcodeOperations opcodeOp = new OpcodeOperations(nextByte);
+               opcodeOp = new OpcodeOperations(nextByte);
             }
         } else {
             if (opcodeOp.shouldWaitForZeroByte()){
                 if (nextByte == 0){
-//                    Should it not read the zero byte just like /n?
                     return popBytes();
                 }
             } else {
