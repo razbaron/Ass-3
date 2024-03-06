@@ -51,7 +51,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
     @Override
     public byte[] encode(byte[] message) {
-        //TODO: implement this
-        return null;
+        return message;
     }
 }

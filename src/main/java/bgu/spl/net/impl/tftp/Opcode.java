@@ -15,7 +15,9 @@ public enum Opcode {
     public static Opcode getByOrdinal(byte value) {
         int index = Byte.toUnsignedInt(value);
         if (index >= 0 && index < values().length) {
+            int unsignedByte = value & 0xFF; //TODO
             return values()[index];
+
         }
         return UNDEFINED;
     }

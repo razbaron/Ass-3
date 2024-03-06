@@ -4,7 +4,11 @@ import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
 
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
+    TftpServerUsers loggedInUsers;
 
+    public TftpProtocol(TftpServerUsers users){
+        loggedInUsers = users;
+    }
     @Override
     public void start(int connectionId, Connections<byte[]> connections) {
         // TODO implement this
@@ -19,28 +23,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 userLogin(message);
                 break;
         }
-//        switch (message.command) {
-//            case CONNECT:
-//                processConnect(message);
-//                break;
-//            case SEND:
-//                processSend(message);
-//                break;
-//            case SUBSCRIBE:
-//                processSubscribe(message);
-//                break;
-//            case UNSUBSCRIBE:
-//                processUnsubscribe(message);
-//                break;
-//            case DISCONNECT:
-//                processDisconnect(message);
-//                break;
-//            case UNKNOWN:
-//                processUnknown(message);
-//                break;
-//        }
 
-        // TODO implement this
         throw new UnsupportedOperationException("Unimplemented method 'process'");
     }
 
@@ -51,7 +34,11 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     public boolean shouldTerminate() {
         // TODO implement this
         throw new UnsupportedOperationException("Unimplemented method 'shouldTerminate'");
-    } 
+    }
+
+    public byte[] getResponse(){
+        return null;
+    }
 
 
     

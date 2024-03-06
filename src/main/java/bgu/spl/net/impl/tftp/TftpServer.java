@@ -1,5 +1,17 @@
 package bgu.spl.net.impl.tftp;
 
-public class TftpServer {
-    //TODO: Implement this
+
+import bgu.spl.net.srv.Server;
+
+
+
+public class TftpServer{
+    public static void main(String[] args) {
+        TftpServerUsers userList = new TftpServerUsers();
+        Server.threadPerClient(Integer.parseInt(args[0]),()-> new TftpProtocol(userList), TftpEncoderDecoder::new).serve();
+    }
 }
+
+
+
+

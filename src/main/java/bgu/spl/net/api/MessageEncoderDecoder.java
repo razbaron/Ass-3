@@ -1,6 +1,6 @@
 package bgu.spl.net.api;
 
-public interface MessageEncoderDecoder<T> {
+public interface MessageEncoderDecoder<T>  {
 
     /**
      * add the next byte to the decoding process
