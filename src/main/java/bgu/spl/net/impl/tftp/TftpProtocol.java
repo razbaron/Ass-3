@@ -3,14 +3,20 @@ package bgu.spl.net.impl.tftp;
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.logging.FileHandler;
 
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     TftpServerUsers loggedInUsers;
     Queue<byte[]> responseToUserQueue;
     Queue<byte[]> incomingDataQueue;
     String userName;
+    String fileNameInWriting;
     int connectionId;
     Connections<byte[]> connections;
     byte[] response;
@@ -53,7 +59,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                     collectDataFromUser(message);
                     break;
                 case ACK:
-                    processAck();
+                    processAck(message);
                     break;
                 case ERROR:
                     processError(message);
@@ -63,7 +69,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                     break;
             }
         }
-
         throw new UnsupportedOperationException("Unimplemented method 'process'");
     }
 
@@ -79,17 +84,22 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void processReadRequest(byte[] message) {
         String fileToRead = extractStringFromMessage(message);
         if (!lookForFileWithError(fileToRead)){
-            // TODO prepare the data in packets for the user
+            // TODO read data of file
+            byte[] fileData = null;
+            createDataPackets(fileData);
         }
     }
 
     private void prepareToReadFromUser(byte[] message) {
-        String fileName = extractStringFromMessage(message);
-        if (fileWithThisNameExist(fileName)){
+        fileNameInWriting = extractStringFromMessage(message);
+        if (fileWithThisNameExist(fileNameInWriting)){
             generateError(5, "File already exists");
         } else {
-//        create a new file in the files folder
-            //TODO create data packets for user
+            File file = new File(" ", fileNameInWriting);
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+            }
             incomingDataQueue = new LinkedList<>();
         }
     }
@@ -103,14 +113,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private boolean fileWithThisNameExist(String fileName) {
-        //TODO look for the file
-        return false;
+        File file = new File(fileName); //TODO should be path
+        return file.exists();
     }
 
     private String extractStringFromMessage(byte[] message) {
-        byte[] subArr = new byte[message.length - 2]; // Ignore first two bytes of Opcode
-        System.arraycopy(message, 2, subArr, 0, subArr.length);
-        return convertUtf8ToString(subArr);
+        return convertUtf8ToString(Arrays.copyOfRange(message,2, message.length)); // Ignore first two bytes of Opcode
     }
 
     private String convertUtf8ToString(byte[] subArr) {
@@ -130,21 +138,84 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         //TODO should generate a response
     }
 
-    private void processAck() {
-        response = responseToUserQueue.remove();
+    private void processAck(byte[] message) {
+        if (ackForPacket(message)){
+            if (ackPacketSuccesses(message)){
+                response = responseToUserQueue.remove();
+            } else {
+                //TODO what should be done if the user did not receive the last packet????
+            }
+        }
+    }
+
+    private boolean ackPacketSuccesses(byte[] message) {
+        byte[] blockNum = Arrays.copyOfRange(message, 2, 4);
+        return didUserReceiveLastPacket(blockNum);
+    }
+
+    private boolean didUserReceiveLastPacket(byte[] receivedByUserBlockNum) {
+        byte[] sentBlockNum = Arrays.copyOfRange(responseToUserQueue.peek(), 4,6);
+        return sentBlockNum == receivedByUserBlockNum;
+    }
+
+    private boolean ackForPacket(byte[] message) {
+        //TODO should I find out if it is a packet Of data Or others?
+        return false;
     }
 
     private void collectDataFromUser(byte[] message) {
         incomingDataQueue.add(message);
-        generateAckReceived();
+        generateAckReceived(message);
+        if (isLastPacket(message)){
+            completeIncomingFile();
+            incomingDataQueue = null;
+        }
     }
 
-    private void generateAckReceived() {
+    private void completeIncomingFile() {
+        byte[] readyToWrite = generateBytesFromData();
+        try {
+            FileOutputStream fileOutputStream = new FileOutputStream(fileNameInWriting);
+            fileOutputStream.write(readyToWrite);
+            fileOutputStream.close();
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    private byte[] generateBytesFromData() {
+        byte[] inProcess = incomingDataQueue.remove();
+        byte[] pureData = Arrays.copyOfRange(inProcess, 6, inProcess.length);
+        while (!incomingDataQueue.isEmpty()){
+            inProcess = incomingDataQueue.remove();
+            pureData = appendBytes(pureData, Arrays.copyOfRange(inProcess, 6, inProcess.length));
+        }
+        return pureData;
+    }
+
+    private byte[] appendBytes(byte[] pureData, byte[] dataToAdd) {
+        byte[] appended = new byte[pureData.length + dataToAdd.length];
+        System.arraycopy(pureData, 0, appended, 0, pureData.length);
+        System.arraycopy(dataToAdd, 0, appended, pureData.length, dataToAdd.length);
+        return appended;
+    }
+
+    private boolean isLastPacket(byte[] message) {
+        return message.length != 518;
+    }
+
+    private void generateAckReceived(byte[] message) {
         OpcodeOperations opcodeOperationsResponse = new OpcodeOperations(Opcode.ACK);
-        response = opcodeOperationsResponse.getInResponseFormat((byte) 0);
+        response = new byte[4];
+        System.arraycopy(opcodeOperationsResponse.getInResponseFormat(), 0, response, 0, 2);
+        System.arraycopy(Arrays.copyOfRange(message, 2, 4), 2, response,2, 2);
     }
 
     private void getDir() {
+//        FileHandler fileHandler = new FileHandler();
         //TODO get a snapshot list of all files fully uploaded
         List<String> listOfFiles = null;
         byte[] dir = generateDirDataForString(listOfFiles);
@@ -152,14 +223,38 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void createDataPackets(byte[] data) {
+        //Todo should lock the queue to avoid BCAST?
         int numberOfPackets;
         numberOfPackets = data.length % 512;
         if (data.length % 512 == 0){
             numberOfPackets++;
         }
-        for (int i = 0; i < numberOfPackets; i++){
-
+        for (int i = 1; i <= numberOfPackets; i++){
+            int sizeOfData = Math.min(512, data.length - ((i -1) * 512));
+            byte[] dataPacket = new byte[6 + sizeOfData];
+            byte[] dataPrefix = generateDataPrefix(sizeOfData, i);
+            System.arraycopy(dataPrefix, 0, dataPacket, 0, dataPrefix.length);
+            System.arraycopy(data, (i - 1) * 512, dataPacket, 6, dataPacket.length);
+            responseToUserQueue.add(dataPacket);
         }
+        response = responseToUserQueue.remove(); //first Packet is ready to be sent
+    }
+
+    private byte[] generateDataPrefix(int sizeOfData, int packetNum) {
+        byte[] prefix = new byte[6];
+        OpcodeOperations operations = new OpcodeOperations("DATA");
+        System.arraycopy(operations.getInResponseFormat(), 0, prefix, 0, operations.getInResponseFormat().length);
+        System.arraycopy(convertIntToByte(sizeOfData), 0, prefix, 2, 2);
+        System.arraycopy(convertIntToByte(packetNum), 0, prefix, 4, 2);
+        return prefix;
+
+    }
+
+    private byte[] convertIntToByte(int number) {
+        byte[] bytes = new byte[2];
+        bytes[0] = (byte) ((number >> 8) & 0xFF);
+        bytes[1] = (byte) (number & 0xFF);
+        return bytes;
     }
 
     private byte[] generateDirDataForString(List<String> listOfFilesAsString) {
@@ -171,7 +266,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             sizeOfDir += filenameAsByte.length;
             listOfFilesAsByte.add(filenameAsByte);
         }
-        sizeOfDir += listOfFilesAsByte.size(); //calculating the added zeros
+        sizeOfDir += listOfFilesAsByte.size(); //calculating the limiter between files
         return generateDirDataForByte(listOfFilesAsByte, sizeOfDir);
     }
 
@@ -184,7 +279,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             byte[] fileName = itr.next();
             System.arraycopy(fileName, 0, dirData, pointerForEmptySpace, fileName.length);
             pointerForEmptySpace += fileName.length;
-            dirData[pointerForEmptySpace] = (byte) 0;
+            dirData[pointerForEmptySpace] = (byte) 0; //Separating file names
             pointerForEmptySpace++;
         }
         if (pointerForEmptySpace != sizeOfDir){
@@ -219,6 +314,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     public byte[] getResponseToUser(){
-        return response;
+        if (response == null){
+            System.out.println("We got a problem, sending null response to user");
+            //TODO remove that print
+        }
+        byte[] toSend = response;
+        response = null;
+        return toSend;
     }
 }
