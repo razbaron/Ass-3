@@ -27,49 +27,41 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     @Override
     public void process(byte[] message) {
         OpcodeOperations opcodeOp = new OpcodeOperations(message[1]);
-        if (Opcode.UNDEFINED.equals(opcodeOp)){ //TODO modify this
+        if (Opcode.UNDEFINED.equals(opcodeOp.opcode) || Opcode.BCAST.equals(opcodeOp.opcode)){
             generateError(4, "Illegal TFTP operation");
         }
-        if (!opcodeOp.opcode.equals(Opcode.LOGRQ) || loggedInUsers.isUserLoggedIn(userName)){
+        if (!(opcodeOp.opcode.equals(Opcode.LOGRQ) || loggedInUsers.isUserLoggedIn(userName))){
             generateError(6, "User not logged in");
-        }
-        switch (opcodeOp.opcode) {
-            case LOGRQ:
-                userLogin(message);
-                break;
-            case DELRQ:
-                deleteFile(message);
-                break;
-            case RRQ:
-                processReadRequest(message);
-                break;
-            case WRQ:
-                prepareToReadFromUser(message);
-                break;
-            case DIRQ:
-                getDir(message);
-                break;
-            case DATA:
-                collectDataFromUser(message);
-                break;
-            case ACK:
-                processAck();
-                break;
-            case BCAST:
-//                Should it be here?? it is form the server to the all users.
-//                processDisconnect(message);
-                break;
-            case ERROR:
-//                For humans only
-                processError(message);
-                break;
-            case DISC:
-                disconnect(message);
-                break;
-            case UNDEFINED:
-//                NoIdea if this status should exist or if it is relevant here
-//                processUnknown(message);
-                break;
+        } else {
+            switch (opcodeOp.opcode) {
+                case LOGRQ:
+                    userLogin(message);
+                    break;
+                case DELRQ:
+                    deleteFile(message);
+                    break;
+                case RRQ:
+                    processReadRequest(message);
+                    break;
+                case WRQ:
+                    prepareToReadFromUser(message);
+                    break;
+                case DIRQ:
+                    getDir();
+                    break;
+                case DATA:
+                    collectDataFromUser(message);
+                    break;
+                case ACK:
+                    processAck();
+                    break;
+                case ERROR:
+                    processError(message);
+                    break;
+                case DISC:
+                    disconnect(message);
+                    break;
+            }
         }
 
         throw new UnsupportedOperationException("Unimplemented method 'process'");
@@ -77,11 +69,11 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void generateError(int errorCode, String message) {
         OpcodeOperations opcodeOperations = new OpcodeOperations(Opcode.ERROR);
-        byte[] errorPrefix = opcodeOperations.getInResponseFormat();
+        byte[] errorPrefix = opcodeOperations.getInResponseFormat((byte) errorCode);
         byte[] errorMessage = convertStringToUtf8(message);
-        //TODO use errorcode
         response = new byte[errorMessage.length + errorPrefix.length];
-        response = opcodeOperations.getInResponseFormat();
+        System.arraycopy(errorPrefix, 0, response, 0, errorPrefix.length);
+        System.arraycopy(errorMessage, 0, response, errorPrefix.length, errorMessage.length);
     }
 
     private void processReadRequest(byte[] message) {
@@ -97,6 +89,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             generateError(5, "File already exists");
         } else {
 //        create a new file in the files folder
+            //TODO create data packets for user
             incomingDataQueue = new LinkedList<>();
         }
     }
@@ -133,8 +126,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void processError(byte[] message) {
-        System.out.println(extractStringFromMessage(message));
-
+        System.out.println(extractStringFromMessage(message)); //For human use
+        //TODO should generate a response
     }
 
     private void processAck() {
@@ -143,16 +136,62 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void collectDataFromUser(byte[] message) {
         incomingDataQueue.add(message);
-        AckReceived();
+        generateAckReceived();
     }
 
-    private void AckReceived() {
+    private void generateAckReceived() {
         OpcodeOperations opcodeOperationsResponse = new OpcodeOperations(Opcode.ACK);
-        response = opcodeOperationsResponse.getInResponseFormat();
+        response = opcodeOperationsResponse.getInResponseFormat((byte) 0);
     }
 
-    private void getDir(byte[] message) {
+    private void getDir() {
+        //TODO get a snapshot list of all files fully uploaded
+        List<String> listOfFiles = null;
+        byte[] dir = generateDirDataForString(listOfFiles);
+        createDataPackets(dir);
+    }
 
+    private void createDataPackets(byte[] data) {
+        int numberOfPackets;
+        numberOfPackets = data.length % 512;
+        if (data.length % 512 == 0){
+            numberOfPackets++;
+        }
+        for (int i = 0; i < numberOfPackets; i++){
+
+        }
+    }
+
+    private byte[] generateDirDataForString(List<String> listOfFilesAsString) {
+        List<byte[]> listOfFilesAsByte = new LinkedList<>();
+        int sizeOfDir = 0;
+        for (String fileName:
+             listOfFilesAsString) {
+            byte[] filenameAsByte = convertStringToUtf8(fileName);
+            sizeOfDir += filenameAsByte.length;
+            listOfFilesAsByte.add(filenameAsByte);
+        }
+        sizeOfDir += listOfFilesAsByte.size(); //calculating the added zeros
+        return generateDirDataForByte(listOfFilesAsByte, sizeOfDir);
+    }
+
+    private byte[] generateDirDataForByte(List<byte[]> listOfFilesAsByte, int sizeOfDir) {
+        byte[] dirData = new byte[sizeOfDir];
+        int pointerForEmptySpace = 0;
+        //Todo should check for limits on size?
+        Iterator<byte[]> itr = listOfFilesAsByte.iterator();
+        while (itr.hasNext()){
+            byte[] fileName = itr.next();
+            System.arraycopy(fileName, 0, dirData, pointerForEmptySpace, fileName.length);
+            pointerForEmptySpace += fileName.length;
+            dirData[pointerForEmptySpace] = (byte) 0;
+            pointerForEmptySpace++;
+        }
+        if (pointerForEmptySpace != sizeOfDir){
+            System.out.println("Huston we have a problem with generateDirDataForByte");
+            //TODO remove this if
+        }
+        return dirData;
     }
 
     private void deleteFile(byte[] message) {
@@ -168,8 +207,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         if (loggedInUsers.isUserLoggedIn(name)){
             generateError(7, "User already logged in");
         } else {
-            loggedInUsers.logInUser(name, connectionId);
             userName = name;
+            loggedInUsers.logInUser(userName, connectionId);
         }
     }
 

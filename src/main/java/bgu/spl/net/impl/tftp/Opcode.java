@@ -26,4 +26,13 @@ public enum Opcode {
         int num = opcode.ordinal();
         return (byte) num;
     }
+
+    public static Opcode getByName(byte value) {
+        int index = Byte.toUnsignedInt(value);
+        if (index >= 0 && index < values().length) {
+            return values()[index];
+
+        }
+        return UNDEFINED;
+    }
 }

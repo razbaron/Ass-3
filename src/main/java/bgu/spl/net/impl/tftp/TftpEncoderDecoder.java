@@ -21,7 +21,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
             }
         } else {
             if (opcodeOp.shouldWaitForZeroByte()){
-                if (nextByte == 0){
+                if (nextByte == (byte) 0){
                     return popBytes();
                 }
             } else {

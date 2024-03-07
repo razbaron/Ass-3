@@ -7,6 +7,10 @@ public class OpcodeOperations {
         this.opcode = Opcode.getByOrdinal(code);
     }
 
+    public OpcodeOperations(String name) {
+        this.opcode = Opcode.valueOf(name);
+    }
+
     public OpcodeOperations(Opcode code) {
         this.opcode = code;
     }
@@ -22,13 +26,17 @@ public class OpcodeOperations {
 
     public byte[] getInResponseFormat(){
         byte[] response = new byte[2];
-        if (opcode.equals(Opcode.ACK)){
-            response = new byte[4];
-            response[2] = 0;
-            response[3] = 0;
-        }
         response[0] = 0;
         response[1] = Opcode.getByte(opcode);
+        return response;
+    }
+
+    public byte[] getInResponseFormat(byte b){
+        byte[] response = new byte[4];
+        byte[] prefix = getInResponseFormat();
+        System.arraycopy(prefix, 0, response, 0, prefix.length);
+        response[2] = 0;
+        response[3] = b;
         return response;
     }
 }
