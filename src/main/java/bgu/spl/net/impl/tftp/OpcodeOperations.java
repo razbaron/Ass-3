@@ -7,6 +7,10 @@ public class OpcodeOperations {
         this.opcode = Opcode.getByOrdinal(code);
     }
 
+    public OpcodeOperations(Opcode code) {
+        this.opcode = code;
+    }
+
     public boolean shouldWaitForZeroByte() {
         return opcode.equals(Opcode.RRQ) ||
                 opcode.equals(Opcode.WRQ) ||
@@ -16,36 +20,15 @@ public class OpcodeOperations {
                 opcode.equals(Opcode.BCAST);
     }
 
-//    switch (bytes[1]){
-//                case (1): {
-////                    RRQ - read request
-//                }
-//                case (2): {
-////                    WRQ - write request
-//                }
-//                case (3): {
-////                    DATA - data packet
-//                }
-//                case (4): {
-////                    ACK - acknowledgment
-//                }
-//                case (5): {
-////                    ERROR - Error
-//                }
-//                case (6): {
-////                    DIRQ - directory listing request
-//                }
-//                case (7): {
-////                    LOGRQ - Login request
-//                }
-//                case (8): {
-////                    DELRQ - delete file request
-//                }
-//                case (9): {
-////                    BCAST - broadcast file added/deleted
-//                }
-//                case (10): {
-////                    DISC - disconnect
-//                }
-//            }
+    public byte[] getInResponseFormat(){
+        byte[] response = new byte[2];
+        if (opcode.equals(Opcode.ACK)){
+            response = new byte[4];
+            response[2] = 0;
+            response[3] = 0;
+        }
+        response[0] = 0;
+        response[1] = Opcode.getByte(opcode);
+        return response;
+    }
 }

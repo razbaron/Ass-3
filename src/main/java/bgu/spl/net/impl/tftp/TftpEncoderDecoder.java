@@ -50,6 +50,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
     @Override
     public byte[] encode(byte[] message) {
+        //TODO should we add 0 as an the limiter
         return message;
     }
 }

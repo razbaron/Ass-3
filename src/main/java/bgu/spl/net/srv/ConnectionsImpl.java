@@ -3,7 +3,7 @@ package bgu.spl.net.srv;
 import java.util.HashMap;
 
 public class ConnectionsImpl<T> implements Connections<T>{
-    HashMap<Integer, ConnectionHandler<T>> connectionsMap = new HashMap<>();
+    private HashMap<Integer, ConnectionHandler<T>> connectionsMap = new HashMap<>();
 
     @Override
     public void connect(int connectionId, ConnectionHandler<T> handler) {

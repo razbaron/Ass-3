@@ -21,4 +21,9 @@ public enum Opcode {
         }
         return UNDEFINED;
     }
+
+    public static Byte getByte(Opcode opcode){
+        int num = opcode.ordinal();
+        return (byte) num;
+    }
 }

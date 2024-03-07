@@ -36,7 +36,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
                 T nextMessage = encdec.decodeNextByte((byte) read);
                 if (nextMessage != null) {
                     protocol.process(nextMessage);
-                    send((T) ((TftpProtocol) protocol).getResponse());
+                    send((T) ((TftpProtocol) protocol).getResponseToUser());
                 }
             }
 

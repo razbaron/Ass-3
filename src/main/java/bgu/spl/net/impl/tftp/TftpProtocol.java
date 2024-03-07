@@ -11,6 +11,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     Queue<byte[]> responseToUserQueue;
     Queue<byte[]> incomingDataQueue;
     String userName;
+    int connectionId;
+    Connections<byte[]> connections;
     byte[] response;
 
     public TftpProtocol(TftpServerUsers users){
@@ -18,15 +20,18 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
     @Override
     public void start(int connectionId, Connections<byte[]> connections) {
-        // TODO implement this
-        throw new UnsupportedOperationException("Unimplemented method 'start'");
+        this.connectionId = connectionId;
+        this.connections = connections;
     }
 
     @Override
     public void process(byte[] message) {
         OpcodeOperations opcodeOp = new OpcodeOperations(message[1]);
+        if (Opcode.UNDEFINED.equals(opcodeOp)){ //TODO modify this
+            generateError(4, "Illegal TFTP operation");
+        }
         if (!opcodeOp.opcode.equals(Opcode.LOGRQ) || loggedInUsers.isUserLoggedIn(userName)){
-//            ToDo throw an error to user
+            generateError(6, "User not logged in");
         }
         switch (opcodeOp.opcode) {
             case LOGRQ:
@@ -70,15 +75,43 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         throw new UnsupportedOperationException("Unimplemented method 'process'");
     }
 
+    private void generateError(int errorCode, String message) {
+        OpcodeOperations opcodeOperations = new OpcodeOperations(Opcode.ERROR);
+        byte[] errorPrefix = opcodeOperations.getInResponseFormat();
+        byte[] errorMessage = convertStringToUtf8(message);
+        //TODO use errorcode
+        response = new byte[errorMessage.length + errorPrefix.length];
+        response = opcodeOperations.getInResponseFormat();
+    }
+
     private void processReadRequest(byte[] message) {
         String fileToRead = extractStringFromMessage(message);
-        // prepare the data in packets
+        if (!lookForFileWithError(fileToRead)){
+            // TODO prepare the data in packets for the user
+        }
     }
 
     private void prepareToReadFromUser(byte[] message) {
         String fileName = extractStringFromMessage(message);
+        if (fileWithThisNameExist(fileName)){
+            generateError(5, "File already exists");
+        } else {
 //        create a new file in the files folder
-        incomingDataQueue = new LinkedList<>();
+            incomingDataQueue = new LinkedList<>();
+        }
+    }
+
+    private boolean lookForFileWithError(String fileName) {
+        boolean ans = fileWithThisNameExist(fileName);
+        if (!ans){
+            generateError(1, "File not found");
+        }
+        return ans;
+    }
+
+    private boolean fileWithThisNameExist(String fileName) {
+        //TODO look for the file
+        return false;
     }
 
     private String extractStringFromMessage(byte[] message) {
@@ -114,7 +147,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void AckReceived() {
-//        Build a response that data was received
+        OpcodeOperations opcodeOperationsResponse = new OpcodeOperations(Opcode.ACK);
+        response = opcodeOperationsResponse.getInResponseFormat();
     }
 
     private void getDir(byte[] message) {
@@ -123,10 +157,20 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void deleteFile(byte[] message) {
         String fileToDelete = extractStringFromMessage(message);
+        if (!lookForFileWithError(fileToDelete)){
+            //TODO delete file
 //        ToDo notify all users that was deleted
+        }
     }
 
     private void userLogin(byte[] message) {
+        String name = extractStringFromMessage(message);
+        if (loggedInUsers.isUserLoggedIn(name)){
+            generateError(7, "User already logged in");
+        } else {
+            loggedInUsers.logInUser(name, connectionId);
+            userName = name;
+        }
     }
 
     @Override
@@ -135,10 +179,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         throw new UnsupportedOperationException("Unimplemented method 'shouldTerminate'");
     }
 
-    public byte[] getResponse(){
-        return null;
+    public byte[] getResponseToUser(){
+        return response;
     }
-
-
-    
 }
