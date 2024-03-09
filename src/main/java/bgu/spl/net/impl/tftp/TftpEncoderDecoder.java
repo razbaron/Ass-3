@@ -18,7 +18,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
             if (len == 1){
                opcodeOp = new OpcodeOperations(nextByte);
                System.out.println("received " + opcodeOp.opcode.name());
-               if (opcodeOp.opcode.equals(Opcode.DISC)){
+               if (opcodeOp.opcode.equals(Opcode.DISC) || opcodeOp.opcode.equals(Opcode.DIRQ)){
                    pushByte(nextByte);
                    return popBytes();
                }
@@ -26,7 +26,8 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
         } else {
             if (opcodeOp.hasSpecificMsgSize()){
                 int expectedLength = opcodeOp.getExpectedSize();
-                if (expectedLength == len){
+                if (expectedLength - 1 == len){
+                    pushByte(nextByte);
                     return popBytes();
                 }
             } else if (opcodeOp.opcode.equals(Opcode.DATA)){
@@ -70,22 +71,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
     @Override
     public byte[] encode(byte[] message) {
-        if (hasToAddZeroByte(message)){
-            byte[] zero = {(byte) 0};
-            byte[] modified = new byte[message.length + zero.length];
-            System.arraycopy(message, 0, modified, 0, message.length);
-            System.arraycopy(zero, 0, modified, message.length, zero.length);
-            message = modified;
-        }
         return message;
-    }
-
-    private boolean hasToAddZeroByte(byte[] message) {
-        OpcodeOperations opcodeOperations = extractOpFromMessage(message);
-        return opcodeOperations.shouldAddZero();
-    }
-
-    private OpcodeOperations extractOpFromMessage(byte[] message) {
-        return new OpcodeOperations(message[2]);
     }
 }
