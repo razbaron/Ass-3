@@ -3,38 +3,45 @@ package bgu.spl.net.impl.tftp;
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.srv.Connections;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
-import java.util.logging.FileHandler;
+import java.util.stream.Collectors;
 
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     TftpServerUsers loggedInUsers;
     Queue<byte[]> responseToUserQueue;
     Queue<byte[]> incomingDataQueue;
     String userName;
+    String pathToDir;
     String fileNameInWriting;
     int connectionId;
     Connections<byte[]> connections;
     byte[] response;
+    boolean shouldTerminate;
 
     public TftpProtocol(TftpServerUsers users){
         loggedInUsers = users;
     }
     @Override
     public void start(int connectionId, Connections<byte[]> connections) {
+        this.shouldTerminate = false;
         this.connectionId = connectionId;
         this.connections = connections;
+//        this.pathToDir = "server" + File.separator + "Files";
+        this.pathToDir = "Files";
     }
 
     @Override
     public void process(byte[] message) {
+        System.out.println("processing a message in length " + message.length);
         OpcodeOperations opcodeOp = new OpcodeOperations(message[1]);
         if (Opcode.UNDEFINED.equals(opcodeOp.opcode) || Opcode.BCAST.equals(opcodeOp.opcode)){
             generateError(4, "Illegal TFTP operation");
+            System.out.println("Undefined");
         }
         if (!(opcodeOp.opcode.equals(Opcode.LOGRQ) || loggedInUsers.isUserLoggedIn(userName))){
             generateError(6, "User not logged in");
@@ -65,14 +72,38 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                     processError(message);
                     break;
                 case DISC:
-                    disconnect(message);
+                    disconnect();
                     break;
             }
         }
-        throw new UnsupportedOperationException("Unimplemented method 'process'");
+    }
+
+    private void userLogin(byte[] message) {
+        String name = extractStringFromMessage(message);
+        if (loggedInUsers.isUserLoggedIn(name)){
+            generateError(7, "User already logged in");
+        } else {
+            userName = name;
+            loggedInUsers.logInUser(userName, connectionId);
+            generateAckReceivedCommand();
+        }
+    }
+
+    private void deleteFile(byte[] message) {
+        String fileToDelete = extractStringFromMessage(message);
+        if (!lookForFileWithError(fileToDelete)){
+            File file = getMeThisFile(fileToDelete);
+            if (file.delete()) {
+                bcastUsers(0, fileToDelete);
+//        ToDo notify all users that was deleted
+            } else {
+//                TODO should I do something if file was not deleted?
+            }
+        }
     }
 
     private void generateError(int errorCode, String message) {
+        System.out.println("generating Error " + message);
         OpcodeOperations opcodeOperations = new OpcodeOperations(Opcode.ERROR);
         byte[] errorPrefix = opcodeOperations.getInResponseFormat((byte) errorCode);
         byte[] errorMessage = convertStringToUtf8(message);
@@ -84,10 +115,27 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void processReadRequest(byte[] message) {
         String fileToRead = extractStringFromMessage(message);
         if (!lookForFileWithError(fileToRead)){
-            // TODO read data of file
-            byte[] fileData = null;
+            byte[] fileData = getDataOfFile(fileToRead);
             createDataPackets(fileData);
         }
+    }
+
+    private File getMeThisFile(String fileName) {
+        System.out.println("created a file named " + fileName);
+        return new File(pathToDir + File.separator + fileName);
+    }
+
+    private byte[] getDataOfFile(String name) {
+        File file = getMeThisFile(name);
+        byte[] data = new byte[(int) file.length()];
+        try {
+            FileInputStream fis = new FileInputStream(file);
+            fis.read(data);
+            fis.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return data;
     }
 
     private void prepareToReadFromUser(byte[] message) {
@@ -95,13 +143,19 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         if (fileWithThisNameExist(fileNameInWriting)){
             generateError(5, "File already exists");
         } else {
-            File file = new File(" ", fileNameInWriting);
+            File file = getMeThisFile(fileNameInWriting);
             try {
                 file.createNewFile();
             } catch (IOException e) {
             }
             incomingDataQueue = new LinkedList<>();
+            generateGeneralAck();
         }
+    }
+
+    private void generateGeneralAck() {
+        OpcodeOperations op = new OpcodeOperations(Opcode.ACK);
+        response = op.getGeneralAck();
     }
 
     private boolean lookForFileWithError(String fileName) {
@@ -113,11 +167,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private boolean fileWithThisNameExist(String fileName) {
-        File file = new File(fileName); //TODO should be path
+        File file = getMeThisFile(fileName);
         return file.exists();
     }
 
     private String extractStringFromMessage(byte[] message) {
+        System.out.println("extracting string size is " + (message.length - 2));
         return convertUtf8ToString(Arrays.copyOfRange(message,2, message.length)); // Ignore first two bytes of Opcode
     }
 
@@ -129,22 +184,27 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         return str.getBytes(StandardCharsets.UTF_8);
     }
 
-    private void disconnect(byte[] message) {
-
+    private void disconnect() {
+        generateGeneralAck();
+        loggedInUsers.logOutUser(connectionId);
+        connections.disconnect(connectionId);
+        shouldTerminate = true;
     }
 
     private void processError(byte[] message) {
         System.out.println(extractStringFromMessage(message)); //For human use
-        //TODO should generate a response
     }
 
     private void processAck(byte[] message) {
         if (ackForPacket(message)){
             if (ackPacketSuccesses(message)){
-                response = responseToUserQueue.remove();
+                responseToUserQueue.remove(); //Packet was sent and received
+                response = responseToUserQueue.peek();
             } else {
                 //TODO what should be done if the user did not receive the last packet????
             }
+        } else {
+            //TODO what should be done if the user sent that?
         }
     }
 
@@ -159,8 +219,9 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private boolean ackForPacket(byte[] message) {
-        //TODO should I find out if it is a packet Of data Or others?
-        return false;
+        byte[] blockNum = Arrays.copyOfRange(message, 2, 4);
+        byte[] zeros = {(byte) 0, (byte) 0};
+        return blockNum != zeros;
     }
 
     private void collectDataFromUser(byte[] message) {
@@ -178,12 +239,31 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             FileOutputStream fileOutputStream = new FileOutputStream(fileNameInWriting);
             fileOutputStream.write(readyToWrite);
             fileOutputStream.close();
+            bcastUsers(0, fileNameInWriting);
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
+    }
+
+    private void bcastUsers(int i, String fileName) {
+        byte[] fileNameBytes = convertStringToUtf8(fileName);
+        byte[] prefix = new byte[3];
+        OpcodeOperations opToSend = new OpcodeOperations(Opcode.BCAST);
+        System.arraycopy(opToSend.getInResponseFormat(), 0, prefix, 0, 2);
+        prefix[3] = (byte) i;
+        byte[] toBroadcast = new byte[fileNameBytes.length + prefix.length];
+        System.arraycopy(prefix, 0, toBroadcast, 0, prefix.length);
+        System.arraycopy(fileNameBytes, 0, toBroadcast, prefix.length, fileNameBytes.length);
+        Set<Integer> activeConnections = loggedInUsers.getLoggedInUsersId();
+        for (Integer connectedUser :
+                activeConnections) {
+            if (connectedUser != connectionId){
+                connections.send(connectedUser, toBroadcast);
+            }
+        }
     }
 
     private byte[] generateBytesFromData() {
@@ -215,29 +295,42 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void getDir() {
-//        FileHandler fileHandler = new FileHandler();
-        //TODO get a snapshot list of all files fully uploaded
-        List<String> listOfFiles = null;
+        List<String> listOfFiles = new LinkedList<>();
+        try {
+            for (Path path :
+                    listFilesInDirectory(pathToDir)) {
+                listOfFiles.add(path.toString());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         byte[] dir = generateDirDataForString(listOfFiles);
         createDataPackets(dir);
+    }
+
+
+    public static List<Path> listFilesInDirectory(String directoryPath) throws IOException {
+        Path dir = Paths.get(directoryPath);
+        return Files.list(dir)
+                .filter(Files::isRegularFile)
+                .collect(Collectors.toList());
     }
 
     private void createDataPackets(byte[] data) {
         //Todo should lock the queue to avoid BCAST?
         int numberOfPackets;
-        numberOfPackets = data.length % 512;
-        if (data.length % 512 == 0){
-            numberOfPackets++;
-        }
+        numberOfPackets = (data.length / 512) + 1;
         for (int i = 1; i <= numberOfPackets; i++){
             int sizeOfData = Math.min(512, data.length - ((i -1) * 512));
             byte[] dataPacket = new byte[6 + sizeOfData];
             byte[] dataPrefix = generateDataPrefix(sizeOfData, i);
             System.arraycopy(dataPrefix, 0, dataPacket, 0, dataPrefix.length);
-            System.arraycopy(data, (i - 1) * 512, dataPacket, 6, dataPacket.length);
+            if (sizeOfData != 0){
+                System.arraycopy(data, (i - 1) * 512, dataPacket, 6, sizeOfData);
+            }
             responseToUserQueue.add(dataPacket);
         }
-        response = responseToUserQueue.remove(); //first Packet is ready to be sent
+        response = responseToUserQueue.peek(); //first Packet is ready to be sent
     }
 
     private byte[] generateDataPrefix(int sizeOfData, int packetNum) {
@@ -266,14 +359,13 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             sizeOfDir += filenameAsByte.length;
             listOfFilesAsByte.add(filenameAsByte);
         }
-        sizeOfDir += listOfFilesAsByte.size(); //calculating the limiter between files
+        sizeOfDir += listOfFilesAsByte.size(); //calculating delimiter between files
         return generateDirDataForByte(listOfFilesAsByte, sizeOfDir);
     }
 
     private byte[] generateDirDataForByte(List<byte[]> listOfFilesAsByte, int sizeOfDir) {
         byte[] dirData = new byte[sizeOfDir];
         int pointerForEmptySpace = 0;
-        //Todo should check for limits on size?
         Iterator<byte[]> itr = listOfFilesAsByte.iterator();
         while (itr.hasNext()){
             byte[] fileName = itr.next();
@@ -289,28 +381,14 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         return dirData;
     }
 
-    private void deleteFile(byte[] message) {
-        String fileToDelete = extractStringFromMessage(message);
-        if (!lookForFileWithError(fileToDelete)){
-            //TODO delete file
-//        ToDo notify all users that was deleted
-        }
-    }
-
-    private void userLogin(byte[] message) {
-        String name = extractStringFromMessage(message);
-        if (loggedInUsers.isUserLoggedIn(name)){
-            generateError(7, "User already logged in");
-        } else {
-            userName = name;
-            loggedInUsers.logInUser(userName, connectionId);
-        }
+    private void generateAckReceivedCommand() {
+        OpcodeOperations opcodeOperations = new OpcodeOperations(Opcode.ACK);
+        response = opcodeOperations.getInResponseFormat((byte) 0);
     }
 
     @Override
     public boolean shouldTerminate() {
-        // TODO implement this
-        throw new UnsupportedOperationException("Unimplemented method 'shouldTerminate'");
+        return shouldTerminate;
     }
 
     public byte[] getResponseToUser(){

@@ -20,8 +20,7 @@ public class OpcodeOperations {
                 opcode.equals(Opcode.WRQ) ||
                 opcode.equals(Opcode.ERROR) ||
                 opcode.equals(Opcode.LOGRQ) ||
-                opcode.equals(Opcode.DELRQ) ||
-                opcode.equals(Opcode.BCAST);
+                opcode.equals(Opcode.DELRQ);
     }
 
     public byte[] getInResponseFormat(){
@@ -31,6 +30,10 @@ public class OpcodeOperations {
         return response;
     }
 
+    public byte[] getGeneralAck(){
+        return getInResponseFormat((byte) 0);
+    }
+
     public byte[] getInResponseFormat(byte b){
         byte[] response = new byte[4];
         byte[] prefix = getInResponseFormat();
@@ -38,5 +41,20 @@ public class OpcodeOperations {
         response[2] = 0;
         response[3] = b;
         return response;
+    }
+
+    public boolean shouldAddZero() {
+        return opcode.equals(Opcode.ERROR) ||
+                opcode.equals(Opcode.BCAST);
+    }
+
+    public boolean hasSpecificMsgSize(){
+        return opcode.equals(Opcode.ACK) ||
+                opcode.equals(Opcode.DIRQ) ||
+                opcode.equals(Opcode.DISC);
+    }
+
+    public int getExpectedSize() {
+        return opcode.equals(Opcode.ACK) ? 4 : 2;
     }
 }

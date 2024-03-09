@@ -22,8 +22,8 @@ public enum Opcode {
         return UNDEFINED;
     }
 
-    public static Byte getByte(Opcode opcode){
+    public static Byte getByte(Opcode opcode) {
         int num = opcode.ordinal();
-        return (byte) num;
+        return (byte) (num & 0xFF);
     }
 }
