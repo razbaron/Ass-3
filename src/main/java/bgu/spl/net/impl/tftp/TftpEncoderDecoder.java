@@ -17,7 +17,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
         if (len <= 1) {
             if (len == 1){
                opcodeOp = new OpcodeOperations(nextByte);
-               System.out.println("received " + opcodeOp.opcode.name());
+//               System.out.println("received " + opcodeOp.opcode.name());
                if (opcodeOp.opcode.equals(Opcode.DISC) || opcodeOp.opcode.equals(Opcode.DIRQ)){
                    pushByte(nextByte);
                    return popBytes();

@@ -2,8 +2,6 @@ package bgu.spl.net.srv;
 
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.api.MessageEncoderDecoder;
-import bgu.spl.net.impl.tftp.TftpProtocol;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -38,10 +36,10 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
 //                    System.out.println("#Processing message");
                     protocol.process(nextMessage);
 //                    System.out.println("#Ready to response");
-                    T response = (T) ((TftpProtocol) protocol).getResponseToUser();
-                    if (response != null) {
-                        send(response);
-                    }
+//                    T response = (T) ((TftpProtocol) protocol).getResponseToUser();
+//                    if (response != null) {
+//                        send(response);
+//                    }
                 }
             }
 
@@ -66,7 +64,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
             try {
                 out.write((byte[]) msg);
                 out.flush();
-                System.out.println("#Response flushed");
+                System.out.println("#Response flushed by thread " + Thread.currentThread().getName() + ", in the length " + ((byte[]) msg).length);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
