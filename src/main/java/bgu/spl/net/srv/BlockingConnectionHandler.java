@@ -33,13 +33,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
             while (!protocol.shouldTerminate() && connected && (read = in.read()) >= 0) {
                 T nextMessage = encdec.decodeNextByte((byte) read);
                 if (nextMessage != null) {
-//                    System.out.println("#Processing message");
                     protocol.process(nextMessage);
-//                    System.out.println("#Ready to response");
-//                    T response = (T) ((TftpProtocol) protocol).getResponseToUser();
-//                    if (response != null) {
-//                        send(response);
-//                    }
                 }
             }
 
@@ -64,7 +58,6 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
             try {
                 out.write((byte[]) msg);
                 out.flush();
-                System.out.println("#Response flushed by thread " + Thread.currentThread().getName() + ", in the length " + ((byte[]) msg).length);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

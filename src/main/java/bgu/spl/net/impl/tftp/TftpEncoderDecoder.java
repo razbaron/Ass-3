@@ -17,7 +17,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
         if (len <= 1) {
             if (len == 1){
                opcodeOp = new OpcodeOperations(nextByte);
-//               System.out.println("received " + opcodeOp.opcode.name());
                if (opcodeOp.opcode.equals(Opcode.DISC) || opcodeOp.opcode.equals(Opcode.DIRQ)){
                    pushByte(nextByte);
                    return popBytes();
@@ -39,9 +38,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
                     }
                 }
             } else {
-                if (!opcodeOp.shouldWaitForZeroByte()){
-                    System.out.println("we got a problem, message is not decoded correctly in decodeNextByte");
-                }
                 if (nextByte == 0) {
                     return popBytes();
                 }

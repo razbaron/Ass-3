@@ -15,10 +15,6 @@ public class TftpServerUsers {
         return loggedInUsers.containsValue(name);
     }
 
-    public boolean isUserLoggedIn(int id) {
-        return loggedInUsers.containsKey(id);
-    }
-
     public synchronized void logInUser(String name, int id) {
         loggedInUsers.put(id,name);
 
@@ -30,9 +26,5 @@ public class TftpServerUsers {
 
     public synchronized Set<Integer> getLoggedInUsersId(){
         return loggedInUsers.keySet();
-    }
-
-    public synchronized int loggedInUsersCount() {
-        return loggedInUsers.size();
     }
 }
