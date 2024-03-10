@@ -192,32 +192,44 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     private void processAck(byte[] message) {
+        System.out.println("Packet number" + extractAckPacketNumber(message));
         if (ackForPacket(message)){
+            System.out.println("ACK for a packet");
             if (ackPacketSuccesses(message)){
+                System.out.println("success");
                 responseToUserQueue.remove(); //Packet was sent and received
                 response = responseToUserQueue.peek();
             } else {
+                System.out.println("fail");
                 //TODO what should be done if the user did not receive the last packet????
             }
         } else {
+            System.out.println("ACK not for a packet");
             //TODO what should be done if the user sent that?
         }
     }
 
-    private boolean ackPacketSuccesses(byte[] message) {
-        byte[] blockNum = Arrays.copyOfRange(message, 2, 4);
-        return didUserReceiveLastPacket(blockNum);
+    private int extractAckPacketNumber(byte[] message) {
+        return ((message[2] & 0xFF) << 8) | (message[3] & 0xFF);
     }
 
-    private boolean didUserReceiveLastPacket(byte[] receivedByUserBlockNum) {
-        byte[] sentBlockNum = Arrays.copyOfRange(responseToUserQueue.peek(), 4,6);
-        return sentBlockNum.equals(receivedByUserBlockNum);
+    private int convertByteToInt(byte[] bs){
+        return ((bs[0] & 0xFF) << 8) | (bs[1] & 0xFF);
+
+    }
+
+    private boolean ackPacketSuccesses(byte[] message) {
+        byte[] blockNum = Arrays.copyOfRange(responseToUserQueue.peek(), 4, 6);
+        System.out.println("block num length " + blockNum.length +", block number is " + convertByteToInt(blockNum));
+        System.out.println("Last response" + extractDataPacketNumber(responseToUserQueue.peek()));
+        return extractAckPacketNumber(message) == extractDataPacketNumber(responseToUserQueue.peek());
+//        return didUserReceiveLastPacket(message);
     }
 
     private boolean ackForPacket(byte[] message) {
-        byte[] blockNum = Arrays.copyOfRange(message, 2, 4);
-        byte[] zeros = {(byte) 0, (byte) 0};
-        return !blockNum.equals(zeros);
+        return extractAckPacketNumber(message) != 0;
+//        byte[] zeros = {(byte) 0, (byte) 0};
+//        return !blockNum.equals(zeros);
     }
 
     private void collectDataFromUser(byte[] message) {
@@ -323,20 +335,36 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
                 System.arraycopy(data, (i - 1) * 512, dataPacket, 6, sizeOfData);
             }
             responseToUserQueue.add(dataPacket);
+            System.out.println("Data packet: " + bytesToHex(dataPacket));
+            System.out.println("Added packet " + i + " to queue, queue is size " + responseToUserQueue.size() + ", packet num: " + extractDataPacketNumber(dataPacket));
         }
         response = responseToUserQueue.peek(); //first Packet is ready to be sent
+    }
+
+    private int extractDataPacketNumber(byte[] dataPacket) {
+        return ((dataPacket[4] & 0xFF) << 8) | (dataPacket[5] & 0xFF);
     }
 
     private boolean isLastPacket(byte[] message) {
         return message.length != 518;
     }
-
+    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
     private byte[] generateDataPrefix(int sizeOfData, int packetNum) {
         byte[] prefix = new byte[6];
         OpcodeOperations operations = new OpcodeOperations("DATA");
         System.arraycopy(operations.getInResponseFormat(), 0, prefix, 0, operations.getInResponseFormat().length);
         System.arraycopy(convertIntToByte(sizeOfData), 0, prefix, 2, 2);
         System.arraycopy(convertIntToByte(packetNum), 0, prefix, 4, 2);
+        System.out.println("prefix: " + bytesToHex(prefix));
         return prefix;
 
     }
@@ -387,8 +415,9 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     }
 
     public byte[] getResponseToUser(){
-//        if (response == null){
-//            System.out.println("We got a problem, sending null response to user");
+        if (response != null) {
+            System.out.println("#That my response " + extractOpFromMessage(response).opcode.name() + ", length is " + response.length);
+        }
 //            //TODO remove that print
 //        } else {
 //            System.out.println("#That my response " + response[1] + " length is " + response.length);
@@ -412,7 +441,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private boolean hasToAddZeroByte(byte[] message) {
         OpcodeOperations opcodeOperations = extractOpFromMessage(message);
-        System.out.println("#Got this opcode" + opcodeOperations.opcode.name());
         return opcodeOperations.shouldAddZero();
     }
 
