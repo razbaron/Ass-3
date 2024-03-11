@@ -104,7 +104,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             if (file.delete()) {
                 needToBcast = true;
                 fileNameInProcess = fileToDelete;
-//                bcastUsers(0, fileToDelete);
                 generateGeneralAck();
             } else {
                 generateError(2, "Access violation – File cannot be written, read or deleted.");
@@ -115,7 +114,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void processReadRequest(byte[] message) {
         String fileToRead = extractStringFromMessage(message);
         if (lookForFileWithError(fileToRead)){
-//            connections.send(connectionId, response);
             byte[] fileData = getDataOfFile(fileToRead);
             createDataPackets(fileData);
         }
